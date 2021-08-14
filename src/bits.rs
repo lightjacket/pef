@@ -67,6 +67,8 @@ impl Bits {
     }
 
     pub fn append_from(&mut self, other: u64, mut num_bits: usize) -> &mut Self {
+        let other = other.reverse_bits() >> (64 - num_bits);
+
         // Two cases here, (1) where the other bits overlap a boundary in our vec, and (2) where
         // it does not
         if self.current_location + num_bits <= 64 {
@@ -85,14 +87,17 @@ impl Bits {
             // first fill current bit vec index
             let last_u64 = self.bits.last_mut().unwrap();
             let remaining_bits = 64 - self.current_location;
-            *last_u64 = *last_u64 | ((other >> (num_bits - remaining_bits)) << self.current_location);
+            *last_u64 = *last_u64 | ((other << (64 - num_bits + remaining_bits)) << self.current_location);
+            println!("sel={:?}", self);
             self.current_location = 0;
             self.bits.push(0);
+            let other = other >> remaining_bits;
             num_bits -= remaining_bits;
 
             // Then place the remaining bits in the new vec entry, same code as case 2
             let last_u64 = self.bits.last_mut().unwrap();
-            *last_u64 = *last_u64 | (other << self.current_location);
+            let bit_mask = u64::MAX >> (64 - num_bits);
+            *last_u64 = *last_u64 | ((other & bit_mask) << self.current_location);
             self.current_location += num_bits;
 
             if self.current_location == 64 {
@@ -101,6 +106,30 @@ impl Bits {
             }
         }
         self
+    }
+
+    pub fn select_1(&self, index: usize) -> Option<usize> {
+        let mut total = 0;
+        for (vec_index, i) in self.bits.iter().enumerate() {
+            let c = i.count_ones() as usize;
+            if total + c >= index {
+                // It's in our current u64, so drop down and count
+                for bit_index in 0..63 {
+                    if i & (1 << bit_index) == 1 << bit_index {
+                        total += 1;
+                    }
+                    if total == index + 1 {
+                        return Some(64 * vec_index + bit_index);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn slice(&self, start: usize, end: usize) -> Option<u64> {
+        let started = *self.bits.get(start / 64)? >> (start % 64);
+        Some((started << (64 - (end - start))).reverse_bits())
     }
 }
 
@@ -135,5 +164,56 @@ mod tests {
             .append_zeros(40)
             .append_ones(20);
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn can_append_from_with_a_variety_of_bits() {
+        assert_eq!(
+            Bits::new().append_zeros(1).append_ones(1),
+            Bits::new().append_from(1, 2)
+        )
+    }
+
+    #[test]
+    fn can_append_from_with_a_variety_of_bits_across_boundaries() {
+        assert_eq!(
+            Bits::new().append_zeros(64).append_ones(1),
+            Bits::new().append_zeros(63).append_from(1, 2)
+        )
+    }
+
+    #[test]
+    fn select_1_in_first_u64() {
+        assert_eq!(
+            Bits::new().append_zeros(32).append_ones(4).select_1(3),
+            Some(35)
+        )
+    }
+
+    #[test]
+    fn select_1_in_second_u64() {
+        assert_eq!(
+            Bits::new().append_zeros(80).append_ones(4).select_1(3),
+            Some(83)
+        )
+    }
+
+    #[test]
+    fn select_1_real_example() {
+        let mut bits = Bits::new();
+        let bits = bits
+            .append_ones(2)
+            .append_zeros(1)
+            .append_ones(2);
+        assert_eq!(bits.select_1(1), Some(1));
+        assert_eq!(bits.select_1(2), Some(3));
+    }
+
+    #[test]
+    fn slice_in_first_u64() {
+        assert_eq!(
+            Bits::new().append_zeros(4).append_ones(4).slice(2, 6),
+            Some(3)
+        )
     }
 }

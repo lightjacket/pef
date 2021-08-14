@@ -1,4 +1,6 @@
 mod bits;
+mod elias_fano;
+mod errors;
 
 #[cfg(test)]
 mod tests {
