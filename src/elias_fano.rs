@@ -9,10 +9,13 @@ pub struct EliasFano {
     lower_bits: Bits,
     num_lower_bits: usize,
     num_upper_bits: usize,
+    size: usize,
 }
 
 impl EliasFano {
     pub fn new(ids: Vec<usize>) -> Result<Self, Error> {
+        let size = ids.len();
+
         if !ids.iter().zip(ids.iter().skip(1)).all(|(a, b)| a < b) {
             return Err(Error::unsorted_ids());
         }
@@ -20,7 +23,6 @@ impl EliasFano {
         let m = ids.last().ok_or(Error::no_ids())?;
         let n = ids.len();
         let num_lower_bits = ((*m as f64) / (n as f64)).log2().ceil() as usize;
-        let lower_mask = u64::MAX >> (64 - num_lower_bits);
         let num_upper_bits = (n as f64).log2().ceil() as usize;
         let upper_mask = u64::MAX >> (64 - num_upper_bits);
 
@@ -45,6 +47,7 @@ impl EliasFano {
             upper_bits: all_upper_bits,
             num_lower_bits,
             num_upper_bits,
+            size
         })
     }
 
@@ -54,8 +57,26 @@ impl EliasFano {
             (index + 1) * self.num_lower_bits,
         )?;
         let upper = self.upper_bits.select_1(index)? - index;
-        println!("lower={} upper={}", lower, upper);
         Some((((upper as u64) << self.num_lower_bits) | lower) as usize)
+    }
+
+    pub fn next_geq(&self, value: usize) -> Option<usize> {
+        let value = value as u64;
+        let upper_bits_bucket = (value >> self.num_lower_bits) & (u64::MAX >> (64 - self.num_upper_bits));
+
+        let start = if upper_bits_bucket == 0 {
+            0
+        } else {
+            self.upper_bits.select_0(upper_bits_bucket as usize - 1)? - upper_bits_bucket as usize
+        };
+
+        for i in start..self.size {
+            let to_check = self.get(i);
+            if to_check >= Some(value as usize) {
+                return to_check;
+            }
+        }
+        None
     }
 }
 
@@ -64,11 +85,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn ef_get() {
         let ef = EliasFano::new(vec![2, 3, 5, 7, 11, 13, 24]).expect("elias fano encoding");
         assert_eq!(ef.get(0), Some(2));
         assert_eq!(ef.get(1), Some(3));
         assert_eq!(ef.get(4), Some(11));
         assert_eq!(ef.get(6), Some(24));
+    }
+
+    #[test]
+    fn ef_next_geq() {
+        let ef = EliasFano::new(vec![2, 3, 5, 7, 11, 13, 24]).expect("elias fano encoding");
+        assert_eq!(ef.next_geq(1), Some(2));
+        assert_eq!(ef.next_geq(3), Some(3));
+        assert_eq!(ef.next_geq(4), Some(5));
+        assert_eq!(ef.next_geq(14), Some(24));
     }
 }

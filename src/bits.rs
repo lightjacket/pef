@@ -88,7 +88,6 @@ impl Bits {
             let last_u64 = self.bits.last_mut().unwrap();
             let remaining_bits = 64 - self.current_location;
             *last_u64 = *last_u64 | ((other << (64 - num_bits + remaining_bits)) << self.current_location);
-            println!("sel={:?}", self);
             self.current_location = 0;
             self.bits.push(0);
             let other = other >> remaining_bits;
@@ -116,6 +115,25 @@ impl Bits {
                 // It's in our current u64, so drop down and count
                 for bit_index in 0..63 {
                     if i & (1 << bit_index) == 1 << bit_index {
+                        total += 1;
+                    }
+                    if total == index + 1 {
+                        return Some(64 * vec_index + bit_index);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn select_0(&self, index: usize) -> Option<usize> {
+        let mut total = 0;
+        for (vec_index, i) in self.bits.iter().enumerate() {
+            let c = i.count_zeros() as usize;
+            if total + c >= index {
+                // It's in our current u64, so drop down and count
+                for bit_index in 0..63 {
+                    if ((1 << bit_index) & i) ^ (1 << bit_index) == 1 << bit_index {
                         total += 1;
                     }
                     if total == index + 1 {
@@ -179,6 +197,22 @@ mod tests {
         assert_eq!(
             Bits::new().append_zeros(64).append_ones(1),
             Bits::new().append_zeros(63).append_from(1, 2)
+        )
+    }
+
+    #[test]
+    fn select_0_in_first_u64() {
+        assert_eq!(
+            Bits::new().append_ones(32).append_zeros(4).select_0(3),
+            Some(35)
+        )
+    }
+
+    #[test]
+    fn select_0_in_second_u64() {
+        assert_eq!(
+            Bits::new().append_ones(80).append_zeros(4).select_0(3),
+            Some(83)
         )
     }
 
