@@ -1,7 +1,37 @@
-#[derive(Eq, PartialEq, Debug)]
+use std::fmt::{Debug, Formatter};
+
+/*
+Appending bits happens right-to-left in each u64, but left-to-right in the vec. So imaging
+the vec used u8 instead of u64, the layout would look like:
+
+1. Initial:
+00000000
+
+2. Append 4 ones:
+00001111
+
+3. Append 5 zeros:
+00001111 00000000
+
+4. Append 3 ones:
+00001111 00001110
+
+ */
+
+#[derive(Eq, PartialEq)]
 pub struct Bits {
     bits: Vec<u64>,
     current_location: usize,
+}
+
+impl Debug for Bits {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for i in self.bits.iter() {
+            let s: String = format!("{:064b}", i).chars().rev().collect();
+            write!(f, "{} {} ", s.chars().take(32).collect::<String>(), s.chars().skip(32).collect::<String>())?;
+        }
+        Ok(())
+    }
 }
 
 impl Bits {
@@ -25,8 +55,8 @@ impl Bits {
     }
 
     pub fn append_zeros(&mut self, number_of_zeros: usize) -> &mut Self {
-        self.current_location = (self.current_location + number_of_zeros) % 64;
         (0..(number_of_zeros + self.current_location) / 64).for_each(|_| self.bits.push(0));
+        self.current_location = (self.current_location + number_of_zeros) % 64;
         self
     }
 
@@ -36,7 +66,8 @@ impl Bits {
         if self.current_location + num_bits <= 64 {
             // no boundary overlap (case 2)
             let last_u64 = self.bits.last_mut().unwrap();
-            *last_u64 = *last_u64 | (other << self.current_location);
+            let bit_mask = u64::MAX >> (64 - num_bits);
+            *last_u64 = *last_u64 | ((other & bit_mask) << self.current_location);
             self.current_location += num_bits;
 
             if self.current_location == 64 {
@@ -82,6 +113,21 @@ mod tests {
         a.append_from(u64::MAX, 64).append_from(u64::MAX, 64);
         let mut b = Bits::new();
         b.append_ones(128);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn can_append_bits_overlapping_boundaries() {
+        let mut a = Bits::new();
+        a
+            .append_from((u64::MAX << 24) >> 24, 40)
+            .append_from(0, 40)
+            .append_from((u64::MAX << 44) >> 44, 20);
+        let mut b = Bits::new();
+        b
+            .append_ones(40)
+            .append_zeros(40)
+            .append_ones(20);
         assert_eq!(a, b);
     }
 }
