@@ -2,19 +2,25 @@ use std::fmt::{Debug, Formatter};
 
 /*
 Appending bits happens right-to-left in each u64, but left-to-right in the vec. So imaging
-the vec used u8 instead of u64, the layout would look like:
+the vec used u8 instead of u64, the memory layout would look as follows. Debug printing reverses
+the order of the u64's so that you can read the bits left to right, and everything is in order
+for comparing to expected results.
 
 1. Initial:
-00000000
+memory: 00000000
+print : 00000000
 
 2. Append 4 ones:
-00001111
+memory: 00001111
+print : 11110000
 
 3. Append 5 zeros:
-00001111 00000000
+memory: 00001111 00000000
+print : 11110000 00000000
 
 4. Append 3 ones:
-00001111 00001110
+memory: 00001111 00001110
+print : 11110000 01110000
 
  */
 
