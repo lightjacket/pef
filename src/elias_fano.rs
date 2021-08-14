@@ -47,7 +47,7 @@ impl EliasFano {
             upper_bits: all_upper_bits,
             num_lower_bits,
             num_upper_bits,
-            size
+            size,
         })
     }
 
@@ -77,6 +77,15 @@ impl EliasFano {
             }
         }
         None
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut vec = (self.size as u64).to_be_bytes().to_vec();
+        vec.append(&mut (self.num_upper_bits as u64).to_be_bytes().to_vec());
+        vec.append(&mut (self.num_lower_bits as u64).to_be_bytes().to_vec());
+        vec.append(&mut self.upper_bits.as_bytes());
+        vec.append(&mut self.lower_bits.as_bytes());
+        vec
     }
 }
 

@@ -149,6 +149,10 @@ impl Bits {
         let started = *self.bits.get(start / 64)? >> (start % 64);
         Some((started << (64 - (end - start))).reverse_bits())
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.bits.iter().flat_map(|i| i.to_be_bytes()).collect()
+    }
 }
 
 #[cfg(test)]
