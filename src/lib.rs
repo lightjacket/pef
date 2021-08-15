@@ -2,6 +2,8 @@ mod bits;
 mod elias_fano;
 mod errors;
 
+pub use elias_fano::*;
+
 #[cfg(test)]
 mod tests {
     use flate2::Compression;
