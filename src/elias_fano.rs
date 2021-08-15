@@ -87,6 +87,10 @@ impl EliasFano {
         vec.append(&mut self.lower_bits.as_bytes());
         vec
     }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
+        (0..self.size).filter_map(move |i| self.get(i))
+    }
 }
 
 #[cfg(test)]
@@ -109,5 +113,12 @@ mod tests {
         assert_eq!(ef.next_geq(3), Some(3));
         assert_eq!(ef.next_geq(4), Some(5));
         assert_eq!(ef.next_geq(14), Some(24));
+    }
+
+    #[test]
+    fn can_iterate() {
+        let data = vec![2, 3, 5, 7, 11, 13, 24];
+        let ef = EliasFano::new(data.clone()).expect("elias fano encoding");
+        assert_eq!(ef.iter().collect::<Vec<_>>(), data);
     }
 }
