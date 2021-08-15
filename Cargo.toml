@@ -1,8 +1,10 @@
 [package]
-name = "pef2"
+name = "pef"
 version = "0.1.0"
-authors = ["jonboerner <jonb226@gmail.com>"]
+authors = ["lightjacket <https://github.com/lightjacket>"]
 edition = "2018"
+license = "MIT"
+description = ""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
