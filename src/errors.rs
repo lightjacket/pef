@@ -2,7 +2,8 @@ use std::fmt::{Display, Formatter, Debug};
 
 pub enum ErrorKind {
     UnsortedIds,
-    NoIds
+    NoIds,
+    InvalidSourceData(usize)
 }
 
 pub struct Error {
@@ -17,13 +18,18 @@ impl Error {
     pub fn no_ids() -> Self {
         Self { error: ErrorKind::NoIds }
     }
+
+    pub fn invalid_bits_data(l: usize) -> Self {
+        Self { error: ErrorKind::InvalidSourceData(l) }
+    }
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.error {
             ErrorKind::UnsortedIds => write!(f, "Unsorted ids cannot be compressed. Please sort."),
-            ErrorKind::NoIds => write!(f, "Emptys ids cannot be compressed.")
+            ErrorKind::NoIds => write!(f, "Emptys ids cannot be compressed."),
+            ErrorKind::InvalidSourceData(l) => write!(f, "Input data for Bits is not correct. length={}", l)
         }
     }
 }

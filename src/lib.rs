@@ -3,6 +3,7 @@ mod elias_fano;
 mod errors;
 
 pub use elias_fano::*;
+pub use errors::*;
 
 #[cfg(test)]
 mod tests {

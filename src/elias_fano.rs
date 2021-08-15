@@ -1,28 +1,33 @@
 use crate::bits::Bits;
 use crate::errors::Error;
+use std::ops::Deref;
+use std::borrow::Borrow;
+use std::convert::TryInto;
 
 
 // Logic taken from https://www.antoniomallia.it/sorted-integers-compression-with-elias-fano-encoding.html
 #[derive(Debug)]
-pub struct EliasFano {
-    upper_bits: Bits,
-    lower_bits: Bits,
+pub struct EliasFano<V: AsRef<[u64]>> {
+    upper_bits: Bits<V>,
+    lower_bits: Bits<V>,
     num_lower_bits: usize,
     num_upper_bits: usize,
     size: usize,
 }
 
-impl EliasFano {
-    pub fn new(ids: Vec<usize>) -> Result<Self, Error> {
+impl EliasFano<Vec<u64>> {
+    pub fn new(ids: impl IntoIterator<Item=impl Borrow<usize>>) -> Result<Self, Error> {
+        let ids: Vec<usize> = ids.into_iter().map(|i| *i.borrow()).collect();
+
         let size = ids.len();
 
         if !ids.iter().zip(ids.iter().skip(1)).all(|(a, b)| a < b) {
             return Err(Error::unsorted_ids());
         }
 
-        let m = ids.last().ok_or(Error::no_ids())?;
+        let m = *ids.last().ok_or(Error::no_ids())?;
         let n = ids.len();
-        let num_lower_bits = ((*m as f64) / (n as f64)).log2().ceil() as usize;
+        let num_lower_bits = ((m as f64) / (n as f64)).log2().ceil() as usize;
         let num_upper_bits = (n as f64).log2().ceil() as usize;
         let upper_mask = u64::MAX >> (64 - num_upper_bits);
 
@@ -50,7 +55,9 @@ impl EliasFano {
             size,
         })
     }
+}
 
+impl<V: AsRef<[u64]>> EliasFano<V> {
     pub fn get(&self, index: usize) -> Option<usize> {
         let lower = self.lower_bits.slice(
             index * self.num_lower_bits,
@@ -83,13 +90,28 @@ impl EliasFano {
         let mut vec = (self.size as u64).to_be_bytes().to_vec();
         vec.append(&mut (self.num_upper_bits as u64).to_be_bytes().to_vec());
         vec.append(&mut (self.num_lower_bits as u64).to_be_bytes().to_vec());
-        vec.append(&mut self.upper_bits.as_bytes());
+        let mut upper_bits_data = self.upper_bits.as_bytes();
+        vec.append(&mut (upper_bits_data.len() as u64).to_be_bytes().to_vec());
+        vec.append(&mut upper_bits_data);
         vec.append(&mut self.lower_bits.as_bytes());
         vec
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
         (0..self.size).filter_map(move |i| self.get(i))
+    }
+}
+
+impl <'a> EliasFano<&'a [u64]> {
+    pub fn from_bytes(data: &'a [u8]) -> Result<Self, Error> {
+        let upper_bits_len = u64::from_be_bytes(data[24..32].try_into().map_err(|_| Error::invalid_bits_data(0))?) as usize;
+        Ok(Self {
+            size: u64::from_be_bytes(data[0..8].try_into().map_err(|_| Error::invalid_bits_data(0))?) as usize,
+            num_upper_bits: u64::from_be_bytes(data[8..16].try_into().map_err(|_| Error::invalid_bits_data(0))?) as usize,
+            num_lower_bits: u64::from_be_bytes(data[16..24].try_into().map_err(|_| Error::invalid_bits_data(0))?) as usize,
+            upper_bits: Bits::from_bytes(&data[32..32 + upper_bits_len])?,
+            lower_bits: Bits::from_bytes(&data[32 + upper_bits_len..data.len()])?,
+        })
     }
 }
 
@@ -119,6 +141,15 @@ mod tests {
     fn can_iterate() {
         let data = vec![2, 3, 5, 7, 11, 13, 24];
         let ef = EliasFano::new(data.clone()).expect("elias fano encoding");
+        assert_eq!(ef.iter().collect::<Vec<_>>(), data);
+    }
+
+    #[test]
+    fn serialize_and_deserialize() {
+        let data = vec![2, 3, 5, 7, 11, 13, 24];
+        let ef = EliasFano::new(data.clone()).expect("elias fano encoding");
+        let ef_serialized = ef.as_bytes();
+        let ef = EliasFano::from_bytes(ef_serialized.as_slice()).expect("deserialized");
         assert_eq!(ef.iter().collect::<Vec<_>>(), data);
     }
 }

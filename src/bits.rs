@@ -1,4 +1,6 @@
 use std::fmt::{Debug, Formatter};
+use crate::errors::Error;
+use std::mem::take;
 
 /*
 Appending bits happens right-to-left in each u64, but left-to-right in the vec. So imaging
@@ -25,14 +27,14 @@ print : 11110000 01110000
  */
 
 #[derive(Eq, PartialEq)]
-pub struct Bits {
-    bits: Vec<u64>,
+pub struct Bits<V: AsRef<[u64]>> {
+    bits: V,
     current_location: usize,
 }
 
-impl Debug for Bits {
+impl<V: AsRef<[u64]>> Debug for Bits<V> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for i in self.bits.iter() {
+        for i in self.bits.as_ref().iter() {
             let s: String = format!("{:064b}", i).chars().rev().collect();
             write!(f, "{} {} ", s.chars().take(32).collect::<String>(), s.chars().skip(32).collect::<String>())?;
         }
@@ -40,7 +42,8 @@ impl Debug for Bits {
     }
 }
 
-impl Bits {
+
+impl Bits<Vec<u64>> {
     pub fn new() -> Self {
         Self { bits: vec![0], current_location: 0 }
     }
@@ -106,10 +109,12 @@ impl Bits {
         }
         self
     }
+}
 
+impl<V: AsRef<[u64]>> Bits<V> {
     pub fn select_1(&self, index: usize) -> Option<usize> {
         let mut total = 0;
-        for (vec_index, i) in self.bits.iter().enumerate() {
+        for (vec_index, i) in self.bits.as_ref().iter().enumerate() {
             let c = i.count_ones() as usize;
             if total + c >= index {
                 // It's in our current u64, so drop down and count
@@ -128,7 +133,7 @@ impl Bits {
 
     pub fn select_0(&self, index: usize) -> Option<usize> {
         let mut total = 0;
-        for (vec_index, i) in self.bits.iter().enumerate() {
+        for (vec_index, i) in self.bits.as_ref().iter().enumerate() {
             let c = i.count_zeros() as usize;
             if total + c >= index {
                 // It's in our current u64, so drop down and count
@@ -146,12 +151,24 @@ impl Bits {
     }
 
     pub fn slice(&self, start: usize, end: usize) -> Option<u64> {
-        let started = *self.bits.get(start / 64)? >> (start % 64);
+        let started = *self.bits.as_ref().get(start / 64)? >> (start % 64);
         Some((started << (64 - (end - start))).reverse_bits())
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        self.bits.iter().flat_map(|i| i.to_be_bytes()).collect()
+        self.bits.as_ref().iter().flat_map(|i| i.to_le_bytes()).collect()
+    }
+}
+
+impl<'a> Bits<&'a [u64]> {
+    pub fn from_bytes(data: &'a [u8]) -> Result<Self, Error> {
+        if data.len() % 8 != 0 {
+            return Err(Error::invalid_bits_data(data.len()));
+        }
+        Ok(Self {
+            bits: unsafe { std::mem::transmute::<_, &[u64]>(data) },
+            current_location: 0,
+        })
     }
 }
 
@@ -251,6 +268,18 @@ mod tests {
     fn slice_in_first_u64() {
         assert_eq!(
             Bits::new().append_zeros(4).append_ones(4).slice(2, 6),
+            Some(3)
+        )
+    }
+
+    #[test]
+    fn serialize_and_deserialize() {
+        let mut bits = Bits::new();
+        bits.append_zeros(4).append_ones(4);
+        let data = bits.as_bytes();
+        let bits = Bits::from_bytes(data.as_slice()).expect("bits");
+        assert_eq!(
+            bits.slice(2, 6),
             Some(3)
         )
     }
