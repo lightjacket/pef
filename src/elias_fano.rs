@@ -1,6 +1,5 @@
 use crate::bits::Bits;
 use crate::errors::Error;
-use std::ops::Deref;
 use std::borrow::Borrow;
 use std::convert::TryInto;
 

@@ -1,6 +1,5 @@
 use std::fmt::{Debug, Formatter};
 use crate::errors::Error;
-use std::mem::take;
 
 /*
 Appending bits happens right-to-left in each u64, but left-to-right in the vec. So imaging
